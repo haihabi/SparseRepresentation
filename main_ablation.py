@@ -75,15 +75,15 @@ if experiment_type == ExperimentType.Initialization:
         dictionary_learning.InitializationMethod.GAUSSIAN,
         dictionary_learning.InitializationMethod.DATA,
     ]:
-        k_svd = dictionary_learning.kSVD(n_iterations, sparsity, num_atoms=num_atoms, initialization_method=init_method)
+        k_svd = dictionary_learning.BaseKSVD(n_iterations, sparsity, num_atoms=num_atoms,
+                                             initialization_method=init_method)
         error = k_svd.train(data_training)
         plt.semilogy(error, label=init_method.name)
     plt.grid()
     plt.legend()
     plt.xlabel("Iteration")
     plt.ylabel("Relative Error")
-    plt.tight_layout()
-    plt.show()
+
 #########################
 # Ablation different MP
 #########################
@@ -93,27 +93,25 @@ if experiment_type == ExperimentType.CodingMethod:
         dictionary_learning.SparseRecoveryMethod.MP,
         dictionary_learning.SparseRecoveryMethod.OMP,
     ]:
-        k_svd = dictionary_learning.kSVD(n_iterations,
-                                         sparsity,
-                                         num_atoms=num_atoms,
-                                         in_sparse_recovery=sparse_recovery_method,
-                                         initialization_method=dictionary_learning.InitializationMethod.PLUSPLUS)
+        k_svd = dictionary_learning.BaseKSVD(n_iterations,
+                                             sparsity,
+                                             num_atoms=num_atoms,
+                                             in_sparse_recovery=sparse_recovery_method,
+                                             initialization_method=dictionary_learning.InitializationMethod.PLUSPLUS)
         error = k_svd.train(data_training)
         plt.semilogy(error, label=sparse_recovery_method.name)
     plt.grid()
     plt.legend()
     plt.xlabel("Iteration")
     plt.ylabel("Relative Error")
-    plt.tight_layout()
-    plt.show()
 
 #########################
 # Batch Training
 #########################
 if experiment_type == ExperimentType.BatchLearning:
-    k_svd = dictionary_learning.kSVD(n_iterations,
-                                     sparsity,
-                                     num_atoms=num_atoms)
+    k_svd = dictionary_learning.BaseKSVD(n_iterations,
+                                         sparsity,
+                                         num_atoms=num_atoms)
     error = k_svd.batch_training(data_training, batch_size=max_data_size, validation=data_validation)
 
     plt.semilogy(error, label="Batch Training")
@@ -121,9 +119,9 @@ if experiment_type == ExperimentType.BatchLearning:
     index = np.linspace(0, data_training.shape[0] - 1, data_training.shape[0]).astype("int")
     for i in range(5):
         np.random.shuffle(index)
-        k_svd = dictionary_learning.kSVD(n_iterations,
-                                         sparsity,
-                                         num_atoms=num_atoms)
+        k_svd = dictionary_learning.BaseKSVD(n_iterations,
+                                             sparsity,
+                                             num_atoms=num_atoms)
         error = k_svd.train(data_training[index[:max_data_size], :], validation=data_validation)
         plt.semilogy(error, label=f"Subset {i}")
 
@@ -131,74 +129,28 @@ if experiment_type == ExperimentType.BatchLearning:
     plt.legend()
     plt.xlabel("Iteration")
     plt.ylabel("Relative Error")
-    plt.tight_layout()
-    plt.show()
 
 #########################
 # Approximation kSVD
 #########################
 if experiment_type == ExperimentType.Approximation:
-    k_svd = dictionary_learning.kSVD(n_iterations,
-                                     sparsity,
-                                     approx=True,
-                                     num_atoms=num_atoms)
+    k_svd = dictionary_learning.BaseKSVD(n_iterations,
+                                         sparsity,
+                                         approx=True,
+                                         num_atoms=num_atoms)
     error = k_svd.train(data_training, validation=data_validation)
     plt.semilogy(error, label=f"Approximated kSVD")
 
-    k_svd = dictionary_learning.kSVD(n_iterations,
-                                     sparsity,
-                                     num_atoms=num_atoms)
+    k_svd = dictionary_learning.BaseKSVD(n_iterations,
+                                         sparsity,
+                                         num_atoms=num_atoms)
     error = k_svd.train(data_training, validation=data_validation)
 
     plt.semilogy(error, label="kSVD")
-
-
 
     plt.grid()
     plt.legend()
     plt.xlabel("Iteration")
     plt.ylabel("Relative Error")
-    plt.tight_layout()
-    plt.show()
-
-# #########################
-# # Ablation different N Atoms
-# #########################
-# mu_list = []
-# error_list = []
-# # 24, 28, 32, 64, 128
-# num_atoms_array = [96, 128, 196, 256, 512, 1024]
-# for num_atoms in num_atoms_array:
-#     k_svd = dictionary_learning.kSVD(200, 8, num_atoms=num_atoms)
-#     error = k_svd.train(data_matrix)
-#
-#     mu_bound = np.sqrt((num_atoms - d) / (d * (num_atoms - 1)))
-#
-#     mu = metrics.compute_mutual_coherence(k_svd.dictionary)
-#     # print(mu, mu_bound)
-#     # plt.subplot(1, 2, 1)
-#     # dictionary_learning.plot_dictionary(k_svd.dictionary)
-#     # plt.subplot(1, 2, 2)
-#     # plt.semilogy(error)
-#     # plt.show()
-#
-#     mu_list.append([mu, mu_bound])
-#     error_list.append(error)
-# mu_list = np.asarray(mu_list)
-# error_list = np.asarray(error_list)
-#
-# # # plt.plot(mu_list)
-# # # print(mu, mu_bound)
-# # print(error_list.shape)
-# for i, num_atoms in enumerate(num_atoms_array):
-#     plt.semilogy(error_list[i, :], label=r"$N_{atoms}=$" + f"{num_atoms}")
-# plt.legend()
-# plt.grid()
-# plt.xlabel("Iteration")
-# plt.ylabel("Relative Error")
-# plt.tight_layout()
-# plt.show()
-#
-# #########################
-# # reconsturction
-# #########################
+plt.tight_layout()
+plt.show()

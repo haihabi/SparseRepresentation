@@ -1,70 +1,13 @@
 import numpy as np
 import tqdm
-
 from enum import Enum
-from sparselandtools.dictionaries.utils import overcomplete_haar_dictionary, overcomplete_idctii_dictionary
-from sparselandtools.pursuits import MatchingPursuit
 from dictionary_learning import sparse_recovery
+from dictionary_learning.config import KSVDConfig
+from dictionary_learning.dictionary_initialization import InitializationMethod, initialized_dictionary
+from dictionary_learning.sparse_recovery import SparseRecoveryMethod
 
 
-class InitializationMethod(Enum):
-    GAUSSIAN = 0
-    DATA = 1
-    PLUSPLUS = 2
-    HAAR = 3
-    DCT = 4
-
-
-class SparseRecoveryMethod(Enum):
-    MP = 0
-    OMP = 1
-    TMP = 2
-
-
-def initialized_dictionary(in_y_matrix: np.ndarray, num_atoms: int, initialization_method: InitializationMethod):
-    y_matrix = in_y_matrix
-    # randomly select initial dictionary from data
-    if initialization_method == InitializationMethod.DATA:
-        idx_set = range(in_y_matrix.shape[1])
-        idxs = np.random.choice(idx_set, num_atoms, replace=False)
-        y_matrix = in_y_matrix[:, np.delete(idx_set, idxs)]
-        d_matrix = in_y_matrix[:, idxs] / np.linalg.norm(in_y_matrix[:, idxs], axis=0)
-    elif initialization_method == InitializationMethod.GAUSSIAN:
-        d_matrix = np.random.randn(in_y_matrix.shape[0], num_atoms)
-        d_matrix = d_matrix / np.linalg.norm(d_matrix, axis=0, keepdims=True)
-    elif initialization_method == InitializationMethod.HAAR:
-        d_matrix = overcomplete_haar_dictionary(np.sqrt(in_y_matrix.shape[0]).astype("int"), num_atoms).T[
-                   :, :num_atoms]
-    elif initialization_method == InitializationMethod.DCT:
-        d_matrix = overcomplete_idctii_dictionary(np.sqrt(in_y_matrix.shape[0]).astype("int"),
-                                                  num_atoms)[
-                   :, :num_atoms]
-    elif initialization_method == InitializationMethod.PLUSPLUS:
-        index = np.linspace(0, in_y_matrix.shape[1] - 1, in_y_matrix.shape[1]).astype("int")
-        filter_list = []
-        for i in range(num_atoms):
-            if i == 0:
-                corr = in_y_matrix.T @ in_y_matrix
-                norm_vec = np.linalg.norm(in_y_matrix, axis=0)
-                cosin_distance = corr / (norm_vec.reshape([-1, 1]) @ norm_vec.reshape([1, -1]))
-                corr_factor = np.sum(np.abs(cosin_distance), axis=0)
-            else:
-                corr = (in_y_matrix[:, index].T @ in_y_matrix[:, filter_list])
-                norm_a = np.linalg.norm(in_y_matrix[:, index], axis=0)
-                norm_b = np.linalg.norm(in_y_matrix[:, filter_list], axis=0)
-                cosin_distance = corr / (norm_a.reshape([-1, 1]) @ norm_b.reshape([1, -1]))
-                corr_factor = 1 / np.sum(np.abs(cosin_distance), axis=- 1)
-
-            p = corr_factor / np.sum(corr_factor)
-            select = np.random.choice(index, size=1, p=p)
-            index = np.delete(index, np.where(select == index)[0])  # Remove from index list
-            filter_list.append(select[0])
-        y_matrix = in_y_matrix[:, index]
-        d_matrix = in_y_matrix[:, filter_list] / np.linalg.norm(in_y_matrix[:, filter_list], axis=0)
-    return d_matrix, y_matrix
-
-
-class kSVD:
+class BaseKSVD:
     def __init__(self, n_iterations: int,
                  k_sparse,
                  num_atoms,
@@ -73,6 +16,7 @@ class kSVD:
                  initial_dictionary=None,
                  etol=1e-10,
                  approx=False):
+        self.dictionary_best = None
         self.n_iterations = n_iterations
         self.k_sparse = k_sparse
         self.initial_dictionary = initial_dictionary
@@ -81,6 +25,7 @@ class kSVD:
         self.etol = etol
         self.sparse_recovery = in_sparse_recovery
         self.dictionary = None
+        self.error_best = np.inf
         self.approx = approx
 
     def initialized_dictionary(self, in_y_matrix: np.ndarray):
@@ -92,21 +37,26 @@ class kSVD:
                                                         self.initialization_method)
         return d_matrix, y_matrix
 
-    def sparse_coding(self, in_y_matrix, in_dictionary):
-        if self.sparse_recovery == SparseRecoveryMethod.OMP:
+    def sparse_coding_step(self, in_y_matrix, in_dictionary, in_sparse_recovery=None):
+        sparse_recovery_method = self.sparse_recovery if in_sparse_recovery is None else in_sparse_recovery
+
+        if sparse_recovery_method == SparseRecoveryMethod.OMP:
             return sparse_recovery.orthogonal_matching_pursuit(in_dictionary,
                                                                in_y_matrix,
                                                                in_k_sparse=self.k_sparse)
-        elif self.sparse_recovery == SparseRecoveryMethod.TMP:
+        elif sparse_recovery_method == SparseRecoveryMethod.TMP:
             return sparse_recovery.thresholding_pursuit(in_dictionary,
                                                         in_y_matrix,
                                                         in_k_sparse=self.k_sparse)
-        elif self.sparse_recovery == SparseRecoveryMethod.MP:
+        elif sparse_recovery_method == SparseRecoveryMethod.MP:
             return sparse_recovery.matching_pursuit(in_dictionary,
                                                     in_y_matrix,
                                                     in_k_sparse=self.k_sparse)
         else:
             raise Exception("Unknown coding method")
+
+    def sparse_coding(self, in_y_matrix, in_sparse_recovery: SparseRecoveryMethod = None):
+        return self.sparse_coding_step(in_y_matrix, self.dictionary_best, in_sparse_recovery=in_sparse_recovery)
 
     def update_dictionary(self, in_d_matrix, in_y_matrix, in_x_matrix):
         # codebook update stage
@@ -159,14 +109,14 @@ class kSVD:
         return dictionary, y_matrix
 
     def train_step(self, dictionary, y_matrix):
-        x_matrix = self.sparse_coding(y_matrix, dictionary)
+        x_matrix = self.sparse_coding_step(y_matrix, dictionary)
         dictionary = self.update_dictionary(dictionary, y_matrix, x_matrix)
         return dictionary, x_matrix
 
     def compute_error(self, dictionary, validation, y_matrix, x_matrix):
         if validation is not None:
             validation = validation.T
-            x_matrix_val = self.sparse_coding(validation, dictionary)
+            x_matrix_val = self.sparse_coding_step(validation, dictionary)
             error, break_flag = self.error_check(dictionary, validation, x_matrix_val)
         else:
             error, break_flag = self.error_check(dictionary, y_matrix, x_matrix)
@@ -185,6 +135,9 @@ class kSVD:
         for _ in range(n_iteration):
             dictionary, x_matrix = self.train_step(dictionary, y_matrix)
             error, break_flag = self.compute_error(dictionary, validation, y_matrix, x_matrix)
+            if error < self.error_best:
+                self.error_best = error
+                self.dictionary_best = dictionary
             if not batch_training:
                 pbar.set_description("kSVD Training loop progress")
                 pbar.set_postfix({"Relative Error": error})
@@ -200,20 +153,33 @@ class kSVD:
             return error, break_flag
 
     def batch_training(self, in_y_matrix, batch_size, n_iteration=None, validation=None):
+        self.dictionary, _y_matrix = self.get_dictionary(in_y_matrix)
         n_iteration = self.n_iterations if n_iteration is None else n_iteration
         pbar = tqdm.tqdm(total=n_iteration)
-        index = np.linspace(0, in_y_matrix.shape[0] - 1, in_y_matrix.shape[0]).astype("int")
+        index = np.linspace(0, _y_matrix.shape[0] - 1, _y_matrix.shape[0]).astype("int")
         error_list = []
         for _ in range(n_iteration):
             np.random.shuffle(index)
-            y_matrix = in_y_matrix[index[:batch_size], :]  # Take a random batch of samples
+            y_matrix = _y_matrix[:, index[:batch_size]]  # Take a random batch of samples
 
-            error, break_flag = self.train(y_matrix, n_iteration=1, batch_training=True, validation=validation)
+            error, break_flag = self.train(y_matrix.T, n_iteration=1, batch_training=True, validation=validation)
             error_list.append(error)
             if break_flag:
                 break
             pbar.set_description("Batch kSVD Training loop progress")
-            pbar.set_postfix({"Relative Error": error})
+            pbar.set_postfix({"Relative Error": error, "Relative Error Best": self.error_best})
             pbar.update(1)
         pbar.close()
         return np.asarray(error_list)
+
+
+class KSVD(BaseKSVD):
+    def __init__(self, ksvd_config: KSVDConfig):
+        super().__init__(ksvd_config.n_iterations,
+                         ksvd_config.k_sparse,
+                         ksvd_config.num_atoms,
+                         ksvd_config.in_sparse_recovery,
+                         ksvd_config.initialization_method,
+                         ksvd_config.initial_dictionary,
+                         ksvd_config.etol,
+                         ksvd_config.approx)
