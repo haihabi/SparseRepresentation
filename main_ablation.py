@@ -1,7 +1,6 @@
 import dictionary_learning
 import netCDF4
 import numpy as np
-from dictionary_learning import metrics
 from matplotlib import pyplot as plt
 from sklearn.feature_extraction.image import extract_patches_2d
 from tqdm import tqdm
@@ -24,45 +23,15 @@ validation_size = 2048
 num_atoms = 128
 n_iterations = 200
 sparsity = 8
-experiment_type = ExperimentType.Approximation
+experiment_type = ExperimentType.Initialization
 
-data_cml = False
+data_cml = True
 sum_threshold = 40
 
 filter_data = experiment_type != ExperimentType.BatchLearning
 
-if data_cml:
-    data_folder = r"data\\"
-    dataset.download_open_mrg(local_path=r"data\\")
-    file_location = data_folder + "OpenMRG.zip"
-    dataset.transform_open_mrg(file_location, data_folder)
-    file_location = data_folder + f"radar\\radar.nc"
-    radar_dataset = netCDF4.Dataset(file_location)
-    data_list = []
-    for i in tqdm(range(radar_dataset.variables['data'].shape[0])):
-        x = np.asarray(radar_dataset.variables['data'][i, :, :])
-        if np.all(x != 255):
-            radar_rain_tensor = np.power(10, (x / 15)) * np.power(1 / 200, 1 / 1.5)
-            if np.sum(radar_rain_tensor) > 40:
-                patch_tensors = extract_patches_2d(radar_rain_tensor, (patch_size, patch_size))
-                data_list.append(patch_tensors)
-
-    data_raw = np.concatenate(data_list, axis=0)
-else:
-    data_raw = data.camera()
-    data_raw = extract_patches_2d(data_raw, (patch_size, patch_size))  # Filter
-
-np.random.shuffle(data_raw)
-data_raw = data_raw.reshape([-1, patch_size ** 2]).astype("float")
-# Split into training and validation
-data_validation = data_raw[:validation_size, :]
-data_training = data_raw[validation_size:, :]
-if filter_data:
-    data_training = data_training[:max_data_size, :]
-
-mean_vector = np.mean(data_training, axis=0, keepdims=True)
-data_training -= mean_vector
-data_validation -= mean_vector
+data_training, data_validation, mean_vector = dataset.get_dataset(data_cml, patch_size, filter_data, validation_size,
+                                                                  max_data_size)
 #########################
 # Ablation different Initilization
 #########################
@@ -153,4 +122,6 @@ if experiment_type == ExperimentType.Approximation:
     plt.xlabel("Iteration")
     plt.ylabel("Relative Error")
 plt.tight_layout()
+data_name = "cml" if data_cml else "image"
+plt.savefig(f"{experiment_type.name}_{data_name}.svg")
 plt.show()
