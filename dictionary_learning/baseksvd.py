@@ -156,7 +156,7 @@ class BaseKSVD:
         self.dictionary, _y_matrix = self.get_dictionary(in_y_matrix)
         n_iteration = self.n_iterations if n_iteration is None else n_iteration
         pbar = tqdm.tqdm(total=n_iteration)
-        index = np.linspace(0, _y_matrix.shape[0] - 1, _y_matrix.shape[0]).astype("int")
+        index = np.linspace(0, _y_matrix.shape[1] - 1, _y_matrix.shape[1]).astype("int")
         error_list = []
         for _ in range(n_iteration):
             np.random.shuffle(index)

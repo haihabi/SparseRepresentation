@@ -25,13 +25,13 @@ n_iterations = 200
 sparsity = 8
 experiment_type = ExperimentType.Initialization
 
-data_cml = True
+data_cml = False
 sum_threshold = 40
-
 filter_data = experiment_type != ExperimentType.BatchLearning
-
+# max_data_size = 2000 if experiment_type != ExperimentType.BatchLearning else 10000
 data_training, data_validation, mean_vector = dataset.get_dataset(data_cml, patch_size, filter_data, validation_size,
                                                                   max_data_size)
+print(data_training.shape)
 #########################
 # Ablation different Initilization
 #########################
@@ -47,7 +47,8 @@ if experiment_type == ExperimentType.Initialization:
         k_svd = dictionary_learning.BaseKSVD(n_iterations, sparsity, num_atoms=num_atoms,
                                              initialization_method=init_method)
         error = k_svd.train(data_training)
-        plt.semilogy(error, label=init_method.name)
+        plt.semilogy(error,
+                     label=init_method.name if init_method != dictionary_learning.InitializationMethod.PLUSPLUS else "Mutual Coherence")
     plt.grid()
     plt.legend()
     plt.xlabel("Iteration")
@@ -118,9 +119,9 @@ if experiment_type == ExperimentType.Approximation:
     plt.semilogy(error, label="kSVD")
 
     plt.grid()
-    plt.legend()
-    plt.xlabel("Iteration")
-    plt.ylabel("Relative Error")
+    plt.legend(fontsize=16)
+    plt.xlabel("Iteration", fontsize=16)
+    plt.ylabel("Relative Error", fontsize=16)
 plt.tight_layout()
 data_name = "cml" if data_cml else "image"
 plt.savefig(f"{experiment_type.name}_{data_name}.svg")

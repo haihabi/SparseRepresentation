@@ -49,7 +49,7 @@ def initialized_dictionary(in_y_matrix: np.ndarray, num_atoms: int, initializati
             else:
                 subset_index = index
                 cosine_distance = compute_cosine_distance(in_y_matrix[:, index], in_y_matrix[:, filter_list])
-                corr_factor = 1 - np.max(np.abs(cosine_distance), axis=-1)
+                corr_factor = np.maximum(1 - np.max(np.abs(cosine_distance), axis=-1), 0) # Add for numerical stability
 
             p = corr_factor / np.sum(corr_factor)
             select = np.random.choice(subset_index, size=1, p=p)
