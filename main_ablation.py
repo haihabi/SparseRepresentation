@@ -24,7 +24,7 @@ num_atoms = 128
 n_iterations = 200
 sparsity = 8
 experiment_type = ExperimentType.Initialization
-
+plot_dictionary = True
 data_cml = False
 sum_threshold = 40
 filter_data = experiment_type != ExperimentType.BatchLearning
@@ -47,6 +47,11 @@ if experiment_type == ExperimentType.Initialization:
         k_svd = dictionary_learning.BaseKSVD(n_iterations, sparsity, num_atoms=num_atoms,
                                              initialization_method=init_method)
         error = k_svd.train(data_training)
+        if plot_dictionary:
+            dictionary_learning.plot_dictionary(k_svd.dictionary_best)
+            plt.savefig("dictionary_" + "cml" if data_cml else "image" + ".png")
+            raise NotImplemented
+
         plt.semilogy(error,
                      label=init_method.name if init_method != dictionary_learning.InitializationMethod.PLUSPLUS else "Mutual Coherence")
     plt.grid()

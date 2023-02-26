@@ -19,7 +19,7 @@ def get_dataset(data_cml, patch_size, filter_data, validation_size, max_data_siz
             x = np.asarray(radar_dataset.variables['data'][i, :, :])
             if np.all(x != 255):
                 radar_rain_tensor = np.power(10, (x / 15)) * np.power(1 / 200, 1 / 1.5)
-                if np.sum(radar_rain_tensor) > 40:
+                if np.sum(radar_rain_tensor) > 15:
                     if patch_size > 0:
                         patch_tensors = extract_patches_2d(radar_rain_tensor, (patch_size, patch_size),
                                                            max_patches=2048)
